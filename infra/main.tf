@@ -8,27 +8,15 @@ module "s3" {
 
 module "lambda" {
   source = "./lambda"
-  s3_bucket_name = module.s3.bucket_name
+  sqs_queue_arn = module.sqs.queue_arn
+  sqs_queue_url = module.sqs.queue_url
+  s3_video_bucket_arn = module.s3.video_bucket_arn
+  s3_video_bucket_id = module.s3.video_bucket_id
+  s3_video_bucket_name = module.s3.video_bucket_name
+  s3_lambda_bucket_name = module.s3.lambda_bucket_name
+  s3_lambda_bucket_id = module.s3.lambda_bucket_id
 }
 
 module "sqs" {
   source = "./sqs"
-}
-
-module "ecs" {
-  source = "./ecs"
-  s3_bucket_name = module.s3.bucket_name
-  sqs_queue_url = module.sqs.queue_url
-}
-
-output "s3_bucket_name" {
-  value = module.s3.bucket_name
-}
-
-output "sqs_queue_url" {
-  value = module.sqs.queue_url
-}
-
-output "ecs_cluster_id" {
-  value = module.ecs.cluster_id
 }

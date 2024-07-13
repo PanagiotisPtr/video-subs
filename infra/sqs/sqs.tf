@@ -10,7 +10,3 @@ resource "aws_sqs_queue" "video_processing_queue" {
 resource "aws_sqs_queue" "video_processing_queue_dead_letter" {
   name = "video-processing-queue-dead-letter"
 }
-
-output "queue_url" {
-  value = aws_sqs_queue.video_processing_queue.id
-}
