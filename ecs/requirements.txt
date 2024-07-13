@@ -1,0 +1,4 @@
+boto3
+ffmpeg-python
+openai-whisper
+numpy
