@@ -1,3 +1,12 @@
+terraform {
+  backend "s3" {
+    bucket                  = "terraform-state-video-subtitles-panagiotispetridis"
+    key                     = "video-subtitles-terraform-state"
+    region                  = "eu-west-1"
+    shared_credentials_file = "~/.aws/credentials"
+  }
+}
+
 provider "aws" {
   region = var.aws_region
 }
