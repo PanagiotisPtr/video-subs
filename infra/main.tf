@@ -29,3 +29,10 @@ module "lambda" {
 module "sqs" {
   source = "./sqs"
 }
+
+module "ecs" {
+  sqs_queue_url = module.sqs.queue_url
+  sqs_queue_name = module.sqs.queue_name
+  s3_video_bucket_name = module.s3.video_bucket_name
+  source = "./ecs"
+}
