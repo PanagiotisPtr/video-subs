@@ -1,6 +1,7 @@
 import os
 import boto3
 import json
+import time
 from whisper_subtitles import generate_subtitles
 
 sqs = boto3.client('sqs')
@@ -28,27 +29,25 @@ def handle_message(message):
     body = json.loads(message['Body'])
     bucket = body['bucket']
     key = body['key']
-    uuid = key.split('/')[-1].split('.')[0]
+    basename = key.split('/')[-1].split('.')[0]
 
-    local_video_path = f'/tmp/{uuid}.mp4'
+    local_video_path = f'/tmp/{basename}.mp4'
     print("downloading video: ", bucket, key, local_video_path)
-    download_file(bucket, key, local_video_path)
+    s3.download_file(bucket, key, local_video_path)
 
-    output_path = f'/tmp/{uuid}.mp4'
+    output_path = f'/tmp/{basename}_processed.mp4'
     print("video path: ", local_video_path)
-    generate_subtitles(output_path)
-    upload_file(bucket, f'output_videos/{uuid}.mp4', output_path)
-
-
-def download_file(bucket, key, download_path):
-    s3.download_file(bucket, key, download_path)
-
-
-def upload_file(bucket, key, upload_path):
-    s3.upload_file(upload_path, bucket, key)
+    subtitles_path = generate_subtitles(local_video_path, output_path)
+    print("uploading file")
+    s3.upload_file(output_path, bucket, f'output_videos/{basename}.mp4')
+    s3.upload_file(subtitles_path, bucket, f'output_videos/{basename}.srt')
+    print("completed message processing")
 
 
 if __name__ == "__main__":
     queue_url = os.environ['SQS_QUEUE_URL']
     while True:
+        print("polling")
         poll_sqs(queue_url)
+        print("sleeping")
+        time.sleep(30)
