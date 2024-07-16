@@ -75,6 +75,12 @@ resource "aws_launch_template" "ecs" {
   image_id      = "ami-026ddff86be63eb51"
   instance_type = "g4dn.xlarge"
 
+  user_data = base64encode(<<EOF
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
+EOF
+  )
+
   network_interfaces {
     associate_public_ip_address = true
     security_groups             = [aws_security_group.ecs_sg.id]
@@ -85,6 +91,10 @@ resource "aws_launch_template" "ecs" {
     tags = {
       Name = "ecs-instance"
     }
+  }
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ecs_instance_profile.name
   }
 }
 
@@ -128,6 +138,33 @@ resource "aws_ecs_service" "main" {
   }
 
   depends_on = [aws_autoscaling_group.ecs]
+}
+
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "ecsInstanceRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_instance_profile" "ecs_instance_profile" {
+  name = "ecsInstanceProfile"
+  role = aws_iam_role.ecs_instance_role.name
 }
 
 resource "aws_ecs_task_definition" "main" {
