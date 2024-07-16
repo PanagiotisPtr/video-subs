@@ -42,9 +42,37 @@ resource "aws_ecs_cluster" "main" {
   name = "ecs-cluster"
 }
 
+resource "aws_ecs_capacity_provider" "ec2_cluster" {
+  name = "ec2-cluster-g4dn"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
+    managed_termination_protection = "ENABLED"
+
+    managed_scaling {
+      maximum_scaling_step_size = 1000
+      minimum_scaling_step_size = 1
+      status                    = "ENABLED"
+      target_capacity           = 10
+    }
+  }
+}
+
+resource "aws_ecs_cluster_capacity_providers" "example" {
+  cluster_name = aws_ecs_cluster.main.name
+
+  capacity_providers = [aws_ecs_capacity_provider.ec2_cluster.name]
+
+  default_capacity_provider_strategy {
+    base              = 1
+    weight            = 100
+    capacity_provider = aws_ecs_capacity_provider.ec2_cluster.name
+  }
+}
+
 resource "aws_launch_template" "ecs" {
   name          = "ecs-launch-template"
-  image_id      = data.aws_ami.ami.id
+  image_id      = "ami-026ddff86be63eb51"
   instance_type = "g4dn.xlarge"
 
   network_interfaces {
@@ -60,15 +88,6 @@ resource "aws_launch_template" "ecs" {
   }
 }
 
-data "aws_ami" "ami" {
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-ecs-hvm-*-x86_64-ebs"]
-  }
-}
-
 resource "aws_autoscaling_group" "ecs" {
   launch_template {
     id      = aws_launch_template.ecs.id
@@ -78,12 +97,19 @@ resource "aws_autoscaling_group" "ecs" {
   vpc_zone_identifier = [aws_subnet.main.id]
 
   min_size = 0
-  max_size = 2
-  desired_capacity = 0
+  max_size = 1
+  desired_capacity = 1
+  protect_from_scale_in = true
 
   tag {
     key                 = "Name"
     value               = "ecs-instance"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
     propagate_at_launch = true
   }
 }
@@ -108,27 +134,22 @@ resource "aws_ecs_task_definition" "main" {
   family                   = "ecs-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
-  cpu                      = "4096"
-  memory                   = "16384"
+  cpu                      = "2048"
+  memory                   = "8192"
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
     {
       name      = "video-processor"
       image     = "764060347059.dkr.ecr.eu-west-1.amazonaws.com/video-processing-task:latest"
-      cpu       = 4096
-      memory    = 16384
+      cpu       = 2048
+      memory    = 8192
       essential = true
-      command   = ["python3", "video_processor.py"]
       environment = [
         {
           name  = "SQS_QUEUE_URL"
           value = var.sqs_queue_url
         },
-        {
-          name  = "S3_BUCKET_NAME"
-          value = var.s3_video_bucket_name
-        }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -233,6 +254,27 @@ resource "aws_iam_role_policy" "ecs_task_execution_role_policy" {
           "logs:PutLogEvents"
         ],
         Resource  = "${aws_cloudwatch_log_group.ecs_log_group.arn}:*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ],
+        Resource = var.sqs_queue_arn
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "${var.s3_video_bucket_arn}",
+          "${var.s3_video_bucket_arn}/*"
+        ]
       }
     ]
   })

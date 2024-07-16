@@ -33,6 +33,8 @@ module "sqs" {
 module "ecs" {
   sqs_queue_url = module.sqs.queue_url
   sqs_queue_name = module.sqs.queue_name
+  sqs_queue_arn = module.sqs.queue_arn
   s3_video_bucket_name = module.s3.video_bucket_name
+  s3_video_bucket_arn = module.s3.video_bucket_arn
   source = "./ecs"
 }
