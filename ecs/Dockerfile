@@ -15,13 +15,16 @@ COPY requirements.txt .
 
 # Create and activate a virtual environment
 RUN python3 -m venv venv
-RUN . venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
+ENV PATH="/app/venv/bin:$PATH"
+
+# Install dependencies within the virtual environment
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy the application code
 COPY src /app/src
 
-# Set the working directory
+# Set the working directory to where the application code is located
 WORKDIR /app/src
 
 # Command to run the application
-CMD ["venv/bin/python", "main.py"]
+CMD ["python", "main.py"]

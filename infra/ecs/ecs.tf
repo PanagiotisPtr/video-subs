@@ -42,34 +42,6 @@ resource "aws_ecs_cluster" "main" {
   name = "ecs-cluster"
 }
 
-resource "aws_ecs_capacity_provider" "ec2_cluster" {
-  name = "ec2-cluster-g4dn"
-
-  auto_scaling_group_provider {
-    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
-    managed_termination_protection = "ENABLED"
-
-    managed_scaling {
-      maximum_scaling_step_size = 1000
-      minimum_scaling_step_size = 1
-      status                    = "ENABLED"
-      target_capacity           = 10
-    }
-  }
-}
-
-resource "aws_ecs_cluster_capacity_providers" "example" {
-  cluster_name = aws_ecs_cluster.main.name
-
-  capacity_providers = [aws_ecs_capacity_provider.ec2_cluster.name]
-
-  default_capacity_provider_strategy {
-    base              = 1
-    weight            = 100
-    capacity_provider = aws_ecs_capacity_provider.ec2_cluster.name
-  }
-}
-
 resource "aws_launch_template" "ecs" {
   name          = "ecs-launch-template"
   image_id      = "ami-026ddff86be63eb51"
@@ -77,7 +49,11 @@ resource "aws_launch_template" "ecs" {
 
   user_data = base64encode(<<EOF
 #!/bin/bash
-echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
+curl -o ~/amazon-ecs-init-latest.x86_64.rpm https://s3.eu-west-1.amazonaws.com/amazon-ecs-agent-eu-west-1/amazon-ecs-init-latest.x86_64.rpm
+sudo yum localinstall -y ~/amazon-ecs-init-latest.x86_64.rpm
+sudo sed -i '/After=docker.service/a After=cloud-final.service' /lib/systemd/system/ecs.service
+echo ECS_CLUSTER=${aws_ecs_cluster.main.name} | sudo tee -a /etc/ecs/ecs.config
+sudo systemctl start ecs
 EOF
   )
 
@@ -107,19 +83,13 @@ resource "aws_autoscaling_group" "ecs" {
   vpc_zone_identifier = [aws_subnet.main.id]
 
   min_size = 0
-  max_size = 1
+  max_size = 2
   desired_capacity = 1
   protect_from_scale_in = true
 
   tag {
     key                 = "Name"
     value               = "ecs-instance"
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "AmazonECSManaged"
-    value               = true
     propagate_at_launch = true
   }
 }
@@ -198,56 +168,6 @@ resource "aws_ecs_task_definition" "main" {
       }
     }
   ])
-}
-
-resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
-  alarm_name          = "ScaleUpAlarm"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "AWS/SQS"
-  period              = "60"
-  statistic           = "Sum"
-  threshold           = "1"
-
-  dimensions = {
-    QueueName = var.sqs_queue_name
-  }
-
-  alarm_actions = [aws_autoscaling_policy.scale_up_policy.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
-  alarm_name          = "ScaleDownAlarm"
-  comparison_operator = "LessThanOrEqualToThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "AWS/SQS"
-  period              = "60"
-  statistic           = "Sum"
-  threshold           = "0"
-
-  dimensions = {
-    QueueName = var.sqs_queue_name
-  }
-
-  alarm_actions = [aws_autoscaling_policy.scale_down_policy.arn]
-}
-
-resource "aws_autoscaling_policy" "scale_up_policy" {
-  name                   = "scale-up-policy"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.ecs.name
-}
-
-resource "aws_autoscaling_policy" "scale_down_policy" {
-  name                   = "scale-down-policy"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.ecs.name
 }
 
 resource "aws_cloudwatch_log_group" "ecs_log_group" {
