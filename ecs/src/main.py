@@ -29,7 +29,9 @@ def handle_message(message):
     body = json.loads(message['Body'])
     bucket = body['bucket']
     key = body['key']
-    basename = key.split('/')[-1].split('.')[0]
+    basename = key.replace("input_videos/", "").replace(".mp4", "")
+    dir = "/tmp/" + "/".join(key.replace("input_videos/", "").split("/")[:-1])
+    os.makedirs(dir, exist_ok=True)
 
     local_video_path = f'/tmp/{basename}.mp4'
     print("downloading video: ", bucket, key, local_video_path)
@@ -49,5 +51,3 @@ if __name__ == "__main__":
     while True:
         print("polling")
         poll_sqs(queue_url)
-        print("sleeping")
-        time.sleep(30)

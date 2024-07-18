@@ -2,7 +2,6 @@ import ffmpeg
 import whisper
 from datetime import timedelta
 
-
 def format_time(seconds):
     delta = timedelta(seconds=seconds)
     total_seconds = int(delta.total_seconds())
